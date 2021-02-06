@@ -10,29 +10,28 @@ baudrate = 115200
 
 def read(serialport, baudrate, outputfile):
     with serial.Serial(serialport, baudrate) as ser:
-        ser.timeout = 10
-        ser.write("read\n")
-        ser.read(5)  # read echo
-        data = ser.read(192 * 1024)  # read firmware backup
+        ser.timeout = 20
+        ser.write(str.encode("read\n"))
         with open(outputfile, "wb") as file:
-            file.write(data)
+            for x in range(192):
+                data = ser.read(1024)
+                print("Progress:", "{:.2f}".format(100*x/192), "%")
+                file.write(data)
 
 
 def write(serialport, baudrate, inputfile):
     with open(inputfile, "rb") as file:
         data = file.read()
         with serial.Serial(serialport, baudrate) as ser:
-            ser.write("erase\n")
-            ser.read(6)
+            ser.write(str.encode("erase\n"))
             result = ser.readline()
-            if result != "OK":
+            if result != str.encode("OK\r\n"):
                 print("Erase failed")
                 sys.exit(2)
 
-            ser.write("write\n")
-            ser.read(6)
+            ser.write(str.encode("write\n"))
             result = ser.readline()
-            if result != "OK":
+            if result != str.encode("OK\r\n"):
                 print("Write init failed")
                 sys.exit(2)
 
@@ -44,16 +43,15 @@ def write(serialport, baudrate, inputfile):
                 if length > toWrite:
                     length = toWrite
 
-                ser.write(str(length) + "\n")
-                ser.readline()
+                ser.write(str.encode(str(length) + "\n"))
                 result = ser.readline()
-                if result != "OK":
+                if result != str.encode("OK\r\n"):
                     print("Write size failed")
                     sys.exit(2)
 
                 ser.write(data[written:(written + length)])
                 result = ser.readline()
-                if result != "OK":
+                if result != str.encode("OK\r\n"):
                     print("Write failed")
                     sys.exit(2)
 
@@ -61,10 +59,15 @@ def write(serialport, baudrate, inputfile):
                 toWrite = toWrite - length
                 print("Written:", written, "bytes")
 
-            ser.write("reset\n")
-            ser.read(6)
+            ser.write(str.encode("0\n"))
             result = ser.readline()
-            if result != "OK":
+            if result != str.encode("OK\r\n"):
+                print("Write size failed")
+                sys.exit(2)
+
+            ser.write(str.encode("reset\n"))
+            result = ser.readline()
+            if result != str.encode("OK\r\n"):
                 print("Reset failed")
                 sys.exit(2)
 

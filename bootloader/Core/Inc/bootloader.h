@@ -13,5 +13,6 @@
 void JumpToApplication();
 uint8_t EraseUserApplication();
 uint8_t UserApplicationExists();
+uint8_t WriteUserApplication(uint32_t *data, uint32_t dataSize, uint32_t offset);
 
 #endif //BOOTLOADER_BOOTLOADER_H

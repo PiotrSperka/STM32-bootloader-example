@@ -18,6 +18,8 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#include <string.h>
+#include <stdlib.h>
 #include "main.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -56,6 +58,19 @@ static void MX_USART1_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+char getUsart1Char() {
+    char ret = (char) (huart1.Instance->DR & 0xFF);
+    __HAL_UART_CLEAR_FLAG(&huart1, UART_IT_RXNE);
+    return ret;
+}
+
+uint32_t alignTo32bits(uint32_t val) {
+    uint32_t ret = val / 4;
+    if (val % 4 > 0) ret++;
+
+    return ret;
+}
 
 /* USER CODE END 0 */
 
@@ -98,11 +113,83 @@ int main(void)
 #pragma ide diagnostic ignored "EndlessLoop"
     while (1) {
         if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13) == GPIO_PIN_RESET) {
-            EraseUserApplication();
+            while (1) {
+                char buffer[1048];
+                uint16_t bufferPtr = 0;
 
-            for (int i = 0; i < 6; i++) {
-                HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_7);
-                HAL_Delay(200);
+                memset(buffer, 0, 1048);
+
+                while (1) {
+                    if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE) != RESET) {
+                        char c = getUsart1Char();
+                        if (c != '\n') buffer[bufferPtr++] = c;
+                        else break;
+                    }
+                }
+
+                if (strncmp(buffer, "reset", 5) == 0) {
+                    char *res = "OK\r\n";
+                    HAL_UART_Transmit(&huart1, (uint8_t *) res, strlen(res), 1000);
+
+                    HAL_NVIC_SystemReset();
+                } else if (strncmp(buffer, "read", 4) == 0) {
+                    uint8_t *app = (uint8_t *) (APP_ADDRESS);
+
+                    // Send 192 kB of user application
+                    for (int i = 0; i < 192; i++) {
+                        HAL_UART_Transmit(&huart1, &app[i * 1024], 1024, 10000);
+                    }
+                } else if (strncmp(buffer, "write", 5) == 0) {
+                    uint32_t offset = 0;
+
+                    char *res = "OK\r\n";
+                    HAL_UART_Transmit(&huart1, (uint8_t *) res, strlen(res), 1000);
+                    while (1) {
+                        uint32_t binSize = 0;
+                        // Read data size
+                        memset(buffer, 0, 1048);
+                        bufferPtr = 0;
+                        while (1) {
+                            if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE) != RESET) {
+                                char c = getUsart1Char();
+                                if (c != '\n') buffer[bufferPtr++] = c;
+                                else break;
+                            }
+                        }
+
+                        char *eptr;
+                        binSize = strtol(buffer, &eptr, 10);
+                        HAL_UART_Transmit(&huart1, (uint8_t *) res, strlen(res), 1000);
+
+                        if (binSize > 0) {
+                            memset(buffer, 0, 1048);
+                            if (HAL_UART_Receive(&huart1, (uint8_t *) buffer, binSize, 10000) == HAL_OK) {
+                                if (WriteUserApplication((uint32_t *) buffer, alignTo32bits(binSize), offset)) {
+                                    offset += binSize;
+                                    HAL_UART_Transmit(&huart1, (uint8_t *) res, strlen(res), 1000);
+                                } else {
+                                    char *err = "ERROR\r\n";
+                                    HAL_UART_Transmit(&huart1, (uint8_t *) err, strlen(err), 1000);
+                                    break;
+                                }
+                            } else {
+                                char *err = "ERROR\r\n";
+                                HAL_UART_Transmit(&huart1, (uint8_t *) err, strlen(err), 1000);
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                } else if (strncmp(buffer, "erase", 5) == 0) {
+                    EraseUserApplication();
+
+                    char *res = "OK\r\n";
+                    HAL_UART_Transmit(&huart1, (uint8_t *) res, strlen(res), 1000);
+                } else {
+                    char *res = "Wrong command\r\n";
+                    HAL_UART_Transmit(&huart1, (uint8_t *) res, strlen(res), 1000);
+                }
             }
         }
 
