@@ -35,7 +35,7 @@ uint8_t EraseUserApplication() {
 uint8_t WriteUserApplication(uint32_t *data, uint32_t dataSize, uint32_t offset) {
     if (HAL_FLASH_Unlock() == HAL_OK) {
         for (int i = 0; i < dataSize; i++) {
-            HAL_StatusTypeDef success = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, APP_ADDRESS + offset, data[i]);
+            HAL_StatusTypeDef success = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, APP_ADDRESS + offset + (i * 4), data[i]);
 
             if (success != HAL_OK) {
                 HAL_FLASH_Lock();
